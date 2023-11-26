@@ -1,0 +1,10 @@
+D:\CodePractice\ImageProcessing\ImageProcessing\bin\Debug\ImageProcessing.exe.config
+D:\CodePractice\ImageProcessing\ImageProcessing\bin\Debug\ImageProcessing.exe
+D:\CodePractice\ImageProcessing\ImageProcessing\bin\Debug\ImageProcessing.pdb
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.csproj.AssemblyReference.cache
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.Form1.resources
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.Properties.Resources.resources
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.csproj.GenerateResource.cache
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.csproj.CoreCompileInputs.cache
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.exe
+D:\CodePractice\ImageProcessing\ImageProcessing\obj\Debug\ImageProcessing.pdb
