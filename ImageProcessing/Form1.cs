@@ -10,6 +10,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
+using AForge.Video;
+using AForge.Video.DirectShow;
 
 namespace ImageProcessing
 {
@@ -20,6 +22,7 @@ namespace ImageProcessing
             GreyScale,
             ColorInversion,
             Sepia,
+            Subtract,
             None
         }
 
@@ -33,9 +36,12 @@ namespace ImageProcessing
 
         }
 
+        private VideoCaptureDevice videoDevice;
+
         private Process currentProcess = Process.None; // tracks the current process
-        private Bitmap sourceBitmap = null; // tracks the original source image
-        private Bitmap destinationBitmap = null; // bitmap that facilitates thes processes
+        private Bitmap image1 = null; // tracks the original source image
+        private Bitmap image2 = null; // bitmap that facilitates thes processes
+        private Bitmap image3 = null; // result of subtraction
 
         private HistogramData currentHistogramSelection = HistogramData.Brightness;
         private int[] histogram = new int[256];
@@ -54,11 +60,42 @@ namespace ImageProcessing
             InitializeCBHistogram();
 
             labelDescription1.Text = "Hint: Double click the box below to directly import an image.";
-            label2.Text = "Hint: Double click the box below to directly export an image.";
 
             // init histogram   
             setResetHistogram();
 
+            InitializeWebcam();
+        }
+
+        private void InitializeWebcam()
+        {
+            FilterInfoCollection videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+            if (videoDevices.Count > 0)
+            {
+                videoDevice = new VideoCaptureDevice(videoDevices[0].MonikerString);
+                videoDevice.NewFrame += VideoDevice_NewFrame;
+            }
+            else
+            {
+                MessageBox.Show("No video devices found.");
+                this.Close();
+            }
+        }
+
+        private void VideoDevice_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        {
+            // Update the PictureBox with the new frame
+            pBoxVideo.Image = (Bitmap)eventArgs.Frame.Clone();
+        }
+
+        private void Form_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // Stop the webcam when the form is closing
+            if (videoDevice != null && videoDevice.IsRunning)
+            {
+                videoDevice.SignalToStop();
+                videoDevice.WaitForStop();
+            }
         }
 
         private void setResetHistogram()
@@ -86,52 +123,53 @@ namespace ImageProcessing
 
         private void initializeBitmaps()
         {
-            sourceBitmap = new Bitmap(pBoxOriginal.Image);
-            destinationBitmap = new Bitmap(sourceBitmap.Width, sourceBitmap.Height);
+            image1 = new Bitmap(pBox1.Image);
+            image2 = new Bitmap(image1.Width, image1.Height);
+            image3 = new Bitmap(image1.Width, image1.Height);
         }
 
         private void BasicCopy()
         {
             initializeBitmaps();
-            for (int i = 0; i < sourceBitmap.Width; i++)
+            for (int i = 0; i < image1.Width; i++)
             {
-                for (int j = 0; j < sourceBitmap.Height; j++)
+                for (int j = 0; j < image1.Height; j++)
                 {
-                    Color pixelColor = sourceBitmap.GetPixel(i, j);
-                    destinationBitmap.SetPixel(i, j, pixelColor);
+                    Color pixelColor = image1.GetPixel(i, j);
+                    image2.SetPixel(i, j, pixelColor);
                 }
             }
 
-            pBoxProcessed.Image = destinationBitmap;
+            pBox2.Image = image2;
         }
 
 
         private void GreyScale()
         {
             initializeBitmaps();
-            for (int i = 0; i < sourceBitmap.Width; i++)
+            for (int i = 0; i < image1.Width; i++)
             {
-                for (int j = 0; j < sourceBitmap.Height; j++)
+                for (int j = 0; j < image1.Height; j++)
                 {
-                    Color pixelColor = sourceBitmap.GetPixel(i, j);
+                    Color pixelColor = image1.GetPixel(i, j);
                     int luminance = (int)(0.299 * pixelColor.R + 0.587 * pixelColor.G + 0.114 * pixelColor.B);
                     Color grayscaleColor = Color.FromArgb(luminance, luminance, luminance);
-                    destinationBitmap.SetPixel(i, j, grayscaleColor);
+                    image2.SetPixel(i, j, grayscaleColor);
                 }
             }
 
-            pBoxProcessed.Image = destinationBitmap;
+            pBox2.Image = image2;
         }
 
         private void ColorInversion()
         {
             initializeBitmaps();
 
-            for (int i = 0; i < sourceBitmap.Width; i++)
+            for (int i = 0; i < image1.Width; i++)
             {
-                for (int j = 0; j < sourceBitmap.Height; j++)
+                for (int j = 0; j < image1.Height; j++)
                 {
-                    Color pixelColor = sourceBitmap.GetPixel(i, j);
+                    Color pixelColor = image1.GetPixel(i, j);
 
                     int invertedR = 255 - pixelColor.R;
                     int invertedG = 255 - pixelColor.G;
@@ -139,11 +177,11 @@ namespace ImageProcessing
 
                     Color invertedColor = Color.FromArgb(invertedR, invertedG, invertedB);
 
-                    destinationBitmap.SetPixel(i, j, invertedColor);
+                    image2.SetPixel(i, j, invertedColor);
                 }
             }
 
-            pBoxProcessed.Image = destinationBitmap;
+            pBox2.Image = image2;
         }
 
 
@@ -151,11 +189,11 @@ namespace ImageProcessing
         {
             initializeBitmaps();
 
-            for (int i = 0; i < sourceBitmap.Width; i++)
+            for (int i = 0; i < image1.Width; i++)
             {
-                for (int j = 0; j < sourceBitmap.Height; j++)
+                for (int j = 0; j < image1.Height; j++)
                 {
-                    Color pixelColor = sourceBitmap.GetPixel(i, j);
+                    Color pixelColor = image1.GetPixel(i, j);
 
                     int sepiaR = (int)(0.393 * pixelColor.R + 0.769 * pixelColor.G + 0.189 * pixelColor.B);
                     int sepiaG = (int)(0.349 * pixelColor.R + 0.686 * pixelColor.G + 0.168 * pixelColor.B);
@@ -167,20 +205,20 @@ namespace ImageProcessing
 
                     Color sepiaColor = Color.FromArgb(sepiaR, sepiaG, sepiaB);
 
-                    destinationBitmap.SetPixel(i, j, sepiaColor);
+                    image2.SetPixel(i, j, sepiaColor);
                 }
             }
 
-            pBoxProcessed.Image = destinationBitmap;
+            pBox2.Image = image2;
         }
 
         private void HistogramBrightness()
         {
-            for (int i = 0; i < destinationBitmap.Width; i++)
+            for (int i = 0; i < image2.Width; i++)
             {
-                for (int j = 0; j < destinationBitmap.Height; j++)
+                for (int j = 0; j < image2.Height; j++)
                 {
-                    Color pixelColor = destinationBitmap.GetPixel(i, j);
+                    Color pixelColor = image2.GetPixel(i, j);
 
                     int brightness = (int)(0.299 * pixelColor.R + 0.587 * pixelColor.G + 0.114 * pixelColor.B);
 
@@ -193,11 +231,11 @@ namespace ImageProcessing
 
         private void HistogramContrast()
         {
-            for (int i = 0; i < destinationBitmap.Width; i++)
+            for (int i = 0; i < image2.Width; i++)
             {
-                for (int j = 0; j < destinationBitmap.Height; j++)
+                for (int j = 0; j < image2.Height; j++)
                 {
-                    Color pixelColor = destinationBitmap.GetPixel(i, j);
+                    Color pixelColor = image2.GetPixel(i, j);
 
                     int maxChannel = Math.Max(Math.Max(pixelColor.R, pixelColor.G), pixelColor.B);
                     int minChannel = Math.Min(Math.Min(pixelColor.R, pixelColor.G), pixelColor.B);
@@ -212,11 +250,11 @@ namespace ImageProcessing
 
         private void HistogramRed()
         {
-            for (int i = 0; i < destinationBitmap.Width; i++)
+            for (int i = 0; i < image2.Width; i++)
             {
-                for (int j = 0; j < destinationBitmap.Height; j++)
+                for (int j = 0; j < image2.Height; j++)
                 {
-                    Color pixelColor = destinationBitmap.GetPixel(i, j);
+                    Color pixelColor = image2.GetPixel(i, j);
                     int redValue = pixelColor.R;
                     histogram[redValue]++;
                 }
@@ -226,11 +264,11 @@ namespace ImageProcessing
         }
         private void HistogramGreen()
         {
-            for (int i = 0; i < destinationBitmap.Width; i++)
+            for (int i = 0; i < image2.Width; i++)
             {
-                for (int j = 0; j < destinationBitmap.Height; j++)
+                for (int j = 0; j < image2.Height; j++)
                 {
-                    Color pixelColor = destinationBitmap.GetPixel(i, j);
+                    Color pixelColor = image2.GetPixel(i, j);
                     int greenValue = pixelColor.G;
                     histogram[greenValue]++;
                 }
@@ -241,11 +279,11 @@ namespace ImageProcessing
 
         private void HistogramBlue()
         {
-            for (int i = 0; i < destinationBitmap.Width; i++)
+            for (int i = 0; i < image2.Width; i++)
             {
-                for (int j = 0; j < destinationBitmap.Height; j++)
+                for (int j = 0; j < image2.Height; j++)
                 {
-                    Color pixelColor = destinationBitmap.GetPixel(i, j);
+                    Color pixelColor = image2.GetPixel(i, j);
                     int blueValue = pixelColor.B;
                     histogram[blueValue]++;
                 }
@@ -300,18 +338,13 @@ namespace ImageProcessing
 
         private void SaveImage()
         {
-            // Create a SaveFileDialog
             SaveFileDialog saveFileDialog = new SaveFileDialog();
             saveFileDialog.Filter = "JPEG Image|*.jpg|PNG Image|*.png|Bitmap Image|*.bmp|All Files|*.*";
 
             if (saveFileDialog.ShowDialog() == DialogResult.OK)
             {
-                // Get the file path chosen by the user
                 string filePath = saveFileDialog.FileName;
-
-                // Save the processed image (destinationBitmap) to the chosen file path
-                destinationBitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
-
+                image2.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
                 MessageBox.Show("Image saved successfully!");
             }
         }
@@ -324,10 +357,15 @@ namespace ImageProcessing
 
         }
 
-        private void cbOperations_SelectedIndexChanged(object sender, EventArgs e)
+        private void cbProcess_SelectedIndexChanged(object sender, EventArgs e)
         {
             // combobox processes (copy, greyscale, sepia, etc.) selector
             currentProcess = (Process) cbProcesses.SelectedIndex;
+            if (currentProcess == Process.Subtract)
+            {
+                labelDescription1.Text = "Hint: Double click to load image.";
+                labelDescription2.Text = "Hint: Double click to load background.";
+            }
         }
 
         private void cbHistogram_SelectedIndexChanged(object sender, EventArgs e)
@@ -352,27 +390,97 @@ namespace ImageProcessing
                 case Process.Sepia:
                     Sepia();
                     break;
+
+            }
+            labelDescription2.Text = "Hint: Double click the box below to directly export an image.";
+        }
+
+        private void Subtract()
+        {
+            // Resize images to have the same dimensions
+            ResizeImagesToSameDimensions();
+            Bitmap image3 = new Bitmap(image1.Width, image1.Height);
+            Color green = Color.FromArgb(0, 255, 0);
+            int threshold = 90;
+
+            for (int x = 0; x < image1.Width; x++)
+            {
+                for (int y = 0; y < image1.Height; y++)
+                {
+                    Color pixel = image1.GetPixel(x, y);
+                    Color backPixel = image2.GetPixel(x, y);
+                    int subtractValue = CalculateColorDifference(pixel, green);
+                    if (subtractValue <= threshold)
+                    {
+                        image3.SetPixel(x, y, backPixel);
+                    }
+                    else
+                    {
+                        image3.SetPixel(x, y, pixel);
+                    }
+                }
+            }
+            pBox3.Image = image3;
+        }
+
+        private int CalculateColorDifference(Color c1, Color c2)
+        {
+            int diffR = Math.Abs(c1.R - c2.R);
+            int diffG = Math.Abs(c1.G - c2.G);
+            int diffB = Math.Abs(c1.B - c2.B);
+            return (diffR + diffG + diffB) / 3;
+        }
+
+        private void ResizeImagesToSameDimensions()
+        {
+            if (image1.Width != image2.Width || image1.Height != image2.Height)
+            {
+                // Determine the target dimensions
+                int targetWidth = Math.Max(image1.Width, image2.Width);
+                int targetHeight = Math.Max(image1.Height, image2.Height);
+
+                // Resize image1
+                image1 = ResizeImage(image1, targetWidth, targetHeight);
+
+                // Resize image2
+                image2 = ResizeImage(image2, targetWidth, targetHeight);
             }
         }
+
+        private Bitmap ResizeImage(Bitmap image, int width, int height)
+        {
+            Bitmap resizedImage = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(resizedImage))
+            {
+                g.DrawImage(image, 0, 0, width, height);
+            }
+            return resizedImage;
+        }
+
 
 
         private void btnRun_Click(object sender, EventArgs e)
         {
             // running
-
-            if (pBoxOriginal.Image != null)
+            if (pBox1.Image != null && currentProcess != Process.Subtract)
             {
                 labelCurrProcess.Text = cbProcesses.Text;
                 PerformProcess();
                 GenerateHistogram();
             }
-            else
+            else if (pBox1.Image == null)
+                ShowErrorMessage("No image found. Please import an image.");
+
+            if (currentProcess == Process.Subtract && pBox2.Image != null)
             {
-                MessageBox.Show("No image found. Please import and image.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                labelCurrProcess.Text = "Subtraction";
+                Subtract();
             }
+            else if (currentProcess == Process.Subtract && pBox2.Image == null)
+                ShowErrorMessage("Please load a background image.");
         }
 
-        private void OpenImportImageDialog()
+        private void OpenImportImageDialog(PictureBox pbox, int pboxNum)
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
             openFileDialog.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.gif;*.bmp|All Files|*.*";
@@ -381,7 +489,11 @@ namespace ImageProcessing
             {
                 try
                 {
-                    pBoxOriginal.Image = System.Drawing.Image.FromFile(openFileDialog.FileName);
+                    pbox.Image = System.Drawing.Image.FromFile(openFileDialog.FileName);
+                    if (pboxNum == 1)
+                        image1 = new Bitmap(openFileDialog.FileName);
+                    if (pboxNum == 2)
+                        image2 = new Bitmap(openFileDialog.FileName);
                 }
                 catch (Exception ex)
                 {
@@ -392,17 +504,55 @@ namespace ImageProcessing
 
         private void importToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            OpenImportImageDialog();
+            OpenImportImageDialog(pBox1, 1);
         }
 
-        private void pBoxOriginal_DoubleClick(object sender, EventArgs e)
+        private void pBox1_DoubleClick(object sender, EventArgs e)
         {
-            OpenImportImageDialog();
+            OpenImportImageDialog(pBox1, 1);
         }
 
-        private void pBoxProcessed_DoubleClick(object sender, EventArgs e)
+        private void ShowErrorMessage(String message)
         {
-            SaveImage();
+            MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private void pBox2_DoubleClick(object sender, EventArgs e)
+        {
+            if (currentProcess == Process.Subtract)
+            {
+                OpenImportImageDialog(pBox2, 2);
+            }
+            else if (
+                pBox1.Image != null &&  
+                pBox2.Image != null && 
+                currentProcess != Process.Subtract
+            )
+            {
+                SaveImage();
+            }
+        }
+
+        private void btnOpenCam_Click(object sender, EventArgs e)
+        {
+            pBoxIcon.Visible = false;
+            pBoxIcon.Enabled = false;
+
+        }
+
+        private void pBoxIcon_DoubleClick(object sender, EventArgs e)
+        {
+
+        }
+
+        private void loadImageToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenImportImageDialog(pBox1, 1);
+        }
+
+        private void loadBackgroundToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenImportImageDialog(pBox2, 2);
         }
     }
 }
