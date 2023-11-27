@@ -1,13 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
 using AForge.Video;
@@ -17,7 +9,8 @@ namespace ImageProcessing
 {
     public partial class Form1 : Form
     {
-        private enum Process {
+        private enum Process
+        {
             BasicCopy,
             GreyScale,
             ColorInversion,
@@ -46,7 +39,7 @@ namespace ImageProcessing
         private HistogramData currentHistogramSelection = HistogramData.Brightness;
         private int[] histogram = new int[256];
 
-        bool[] processClicked = { false, false, false, false }; 
+        bool[] processClicked = { false, false, false, false };
 
         public Form1()
         {
@@ -85,7 +78,8 @@ namespace ImageProcessing
         private void VideoDevice_NewFrame(object sender, NewFrameEventArgs eventArgs)
         {
             // Update the PictureBox with the new frame
-            pBoxVideo.Image = (Bitmap)eventArgs.Frame.Clone();
+            image2 = (Bitmap)eventArgs.Frame.Clone();
+            pBox2.Image = image2;
         }
 
         private void Form_FormClosing(object sender, FormClosingEventArgs e)
@@ -110,14 +104,14 @@ namespace ImageProcessing
         private void InitializeCBProcesses()
         {
             // initializes the processes (copy, greyscale, sepia, etc.) dropdown 
-            cbProcesses.SelectedIndex = (int) Process.BasicCopy;
+            cbProcesses.SelectedIndex = (int)Process.BasicCopy;
             cbProcesses.DropDownStyle = ComboBoxStyle.DropDownList;
         }
 
         private void InitializeCBHistogram()
         {
             // initializes the histogram dropdown
-            cbHistogram.SelectedIndex = (int) HistogramData.Brightness;
+            cbHistogram.SelectedIndex = (int)HistogramData.Brightness;
             cbHistogram.DropDownStyle = ComboBoxStyle.DropDownList;
         }
 
@@ -295,7 +289,7 @@ namespace ImageProcessing
 
         private void GenerateHistogram()
         {
-            switch(currentHistogramSelection)
+            switch (currentHistogramSelection)
             {
                 case HistogramData.Brightness:
                     HistogramBrightness();
@@ -360,7 +354,7 @@ namespace ImageProcessing
         private void cbProcess_SelectedIndexChanged(object sender, EventArgs e)
         {
             // combobox processes (copy, greyscale, sepia, etc.) selector
-            currentProcess = (Process) cbProcesses.SelectedIndex;
+            currentProcess = (Process)cbProcesses.SelectedIndex;
             if (currentProcess == Process.Subtract)
             {
                 labelDescription1.Text = "Hint: Double click to load image.";
@@ -371,7 +365,7 @@ namespace ImageProcessing
         private void cbHistogram_SelectedIndexChanged(object sender, EventArgs e)
         {
             // combobox histogram selector
-            currentHistogramSelection = (HistogramData) cbHistogram.SelectedIndex;
+            currentHistogramSelection = (HistogramData)cbHistogram.SelectedIndex;
         }
 
         private void PerformProcess()
@@ -395,13 +389,13 @@ namespace ImageProcessing
             labelDescription2.Text = "Hint: Double click the box below to directly export an image.";
         }
 
-        private void Subtract()
+        private void SubtractWithNoOpenCam()
         {
             // Resize images to have the same dimensions
             ResizeImagesToSameDimensions();
             Bitmap image3 = new Bitmap(image1.Width, image1.Height);
             Color green = Color.FromArgb(0, 255, 0);
-            int threshold = 90;
+            int threshold = 95;
 
             for (int x = 0; x < image1.Width; x++)
             {
@@ -423,6 +417,51 @@ namespace ImageProcessing
             pBox3.Image = image3;
         }
 
+        private void SubtractWithOpenCam()
+        {
+            if (image2 != null && image1.Width == image2.Width && image1.Height == image2.Height)
+            {
+                image3 = new Bitmap(image1.Width, image1.Height);
+                Color backgroundColor = Color.FromArgb(0, 255, 0);
+                int threshold = 95;
+                for (int x = 0; x < image1.Width; x++)
+                {
+                    for (int y = 0; y < image1.Height; y++)
+                    {
+                        Color livePixel = image2.GetPixel(x, y);
+                        Color originalPixel = image1.GetPixel(x, y);
+                        int subtractValue = CalculateColorDifference(livePixel, backgroundColor);
+                        if (subtractValue <= threshold)
+                        {
+                            image3.SetPixel(x, y, livePixel);
+                        }
+                        else
+                        {
+                            image3.SetPixel(x, y, originalPixel);
+                        }
+                    }
+                }
+                pBox3.Image = image3;
+            }
+            else
+            {
+                ShowErrorMessage("Please load a background image and ensure both images have the same dimensions.");
+            }
+        }
+
+
+        private void Subtract()
+        {
+            if (videoDevice != null && videoDevice.IsRunning)
+            {
+                labelCurrProcess.Text = "Subtraction - Live Footage";
+                SubtractWithOpenCam();
+                pBoxIcon.Visible = true;
+            }
+            else
+                SubtractWithNoOpenCam();
+        }
+
         private int CalculateColorDifference(Color c1, Color c2)
         {
             int diffR = Math.Abs(c1.R - c2.R);
@@ -435,14 +474,9 @@ namespace ImageProcessing
         {
             if (image1.Width != image2.Width || image1.Height != image2.Height)
             {
-                // Determine the target dimensions
                 int targetWidth = Math.Max(image1.Width, image2.Width);
                 int targetHeight = Math.Max(image1.Height, image2.Height);
-
-                // Resize image1
                 image1 = ResizeImage(image1, targetWidth, targetHeight);
-
-                // Resize image2
                 image2 = ResizeImage(image2, targetWidth, targetHeight);
             }
         }
@@ -468,7 +502,7 @@ namespace ImageProcessing
                 PerformProcess();
                 GenerateHistogram();
             }
-            else if (pBox1.Image == null)
+            else if (pBox1.Image == null && currentProcess != Process.Subtract)
                 ShowErrorMessage("No image found. Please import an image.");
 
             if (currentProcess == Process.Subtract && pBox2.Image != null)
@@ -522,10 +556,11 @@ namespace ImageProcessing
             if (currentProcess == Process.Subtract)
             {
                 OpenImportImageDialog(pBox2, 2);
+                cbProcesses.SelectedIndex = (int)Process.Subtract;
             }
             else if (
-                pBox1.Image != null &&  
-                pBox2.Image != null && 
+                pBox1.Image != null &&
+                pBox2.Image != null &&
                 currentProcess != Process.Subtract
             )
             {
@@ -533,16 +568,24 @@ namespace ImageProcessing
             }
         }
 
+        private void StartCam()
+        {
+            cbProcesses.SelectedIndex = (int)Process.Subtract;
+            videoDevice.Start();
+            btnOpenCam.Enabled = false;
+            btnCloseCam.Enabled = true;
+        }
+
         private void btnOpenCam_Click(object sender, EventArgs e)
         {
-            pBoxIcon.Visible = false;
+            // pBoxIcon.Visible = false;
             pBoxIcon.Enabled = false;
-
+            StartCam();
         }
 
         private void pBoxIcon_DoubleClick(object sender, EventArgs e)
         {
-
+            StartCam();
         }
 
         private void loadImageToolStripMenuItem_Click(object sender, EventArgs e)
@@ -553,6 +596,19 @@ namespace ImageProcessing
         private void loadBackgroundToolStripMenuItem_Click(object sender, EventArgs e)
         {
             OpenImportImageDialog(pBox2, 2);
+            cbProcesses.SelectedIndex = (int)Process.Subtract;
+        }
+
+        private void btnCloseCam_Click(object sender, EventArgs e)
+        {
+
+            if (videoDevice != null && videoDevice.IsRunning)
+            {
+                videoDevice.SignalToStop();
+                videoDevice.WaitForStop();
+                btnCloseCam.Enabled = false;
+                btnOpenCam.Enabled = true;
+            }
         }
     }
 }
