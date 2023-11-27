@@ -106,6 +106,7 @@ namespace ImageProcessing
             // initializes the processes (copy, greyscale, sepia, etc.) dropdown 
             cbProcesses.SelectedIndex = (int)Process.BasicCopy;
             cbProcesses.DropDownStyle = ComboBoxStyle.DropDownList;
+            pBoxIcon.Visible = false;
         }
 
         private void InitializeCBHistogram()
@@ -359,6 +360,7 @@ namespace ImageProcessing
             {
                 labelDescription1.Text = "Hint: Double click to load image.";
                 labelDescription2.Text = "Hint: Double click to load background.";
+                pBoxIcon.Visible = true;
             }
         }
 
